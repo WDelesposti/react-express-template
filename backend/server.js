@@ -1,5 +1,9 @@
 const express = require("express");
 const cors = require("cors");
+const supabase = require("./supabaseClient");
+const dotenv = require("dotenv");
+
+dotenv.config();
 
 const app = express();
 const port = 5000;
@@ -7,113 +11,59 @@ const port = 5000;
 app.use(cors());
 app.use(express.json());
 
-let notifications = [
-  {
-    id: 1,
-    message: "Alice Johnson sent you a friend request.",
-    type: "Friend Request",
-    read: false,
-  },
-  { id: 2, message: "Bob Smith is logged.", type: "Login Alert", read: false },
-  {
-    id: 3,
-    message: "Charlie Brown posted a new status update.",
-    type: "Post Update",
-    read: false,
-  },
-  {
-    id: 4,
-    message: "Alice Johnson liked your post.",
-    type: "Like",
-    read: false,
-  },
-  {
-    id: 5,
-    message: "Bob Smith commented your post.",
-    type: "Comment",
-    read: false,
-  },
-  {
-    id: 6,
-    message: "Jonathan Edward sent you a friend request.",
-    type: "Friend Request",
-    read: false,
-  },
-  {
-    id: 7,
-    message: "Alice Johnson mentioned you in a post.",
-    type: "Mention",
-    read: false,
-  },
-  {
-    id: 8,
-    message: "Bob Smith invited you to an event.",
-    type: "Event Invite",
-    read: false,
-  },
-  {
-    id: 9,
-    message: "Charlie Brown is logged.",
-    type: "Login Alert",
-    read: false,
-  },
-  {
-    id: 10,
-    message: "Alice Johnson posted a new status update.",
-    type: "Post Update",
-    read: false,
-  },
-  { id: 11, message: "Bob Smith liked your post.", type: "Like", read: false },
-  {
-    id: 12,
-    message: "Charlie Brown commented your post.",
-    type: "Comment",
-    read: false,
-  },
-  {
-    id: 13,
-    message: "Jonathan Edward mentioned you in a post.",
-    type: "Mention",
-    read: false,
-  },
-  {
-    id: 14,
-    message: "Charlie Brown invited you to an event.",
-    type: "Event Invite",
-    read: false,
-  },
-  {
-    id: 15,
-    message: "Charlie Brown sent you a friend request.",
-    type: "Friend Request",
-    read: false,
-  },
-];
-app.get("/api/notifications", (req, res) => {
+app.get("/api/notifications", async (req, res) => {
   let { page = 1, limit = 5 } = req.query;
   page = parseInt(page);
   limit = parseInt(limit);
   const start = (page - 1) * limit;
-  const end = start + limit;
-  const paginatedResponse = notifications.slice(start, end);
-  const totalPages = Math.ceil(notifications.length / limit);
-  res.json({ notifications: paginatedResponse, totalPages });
+  const end = start + limit - 1;
+
+  try {
+    const { data, count, error } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact" })
+      .range(start, end)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const totalPages = Math.ceil(count / limit);
+    res.json({ notifications: data, totalPages });
+  } catch (error) {
+    console.error("Erro ao buscar notificações:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.put("/api/notifications/markAllRead", (req, res) => {
-  notifications = notifications.map((notification) => ({
-    ...notification,
-    read: true,
-  }));
-  res.json({ message: "All notifications marked as read" });
+app.put("/api/notifications/markAllRead", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .match({ read: false });
+
+    if (error) throw error;
+    res.json({ message: "Todas as notificações foram marcadas como lidas" });
+  } catch (error) {
+    console.error("Erro ao marcar todas as notificações como lidas:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.put("/api/notifications/:id", (req, res) => {
-  const id = parseInt(req.params.id);
-  notifications = notifications.map((notification) =>
-    notification.id === id ? { ...notification, read: true } : notification
-  );
-  res.json({ message: "Notification marked as read" });
+app.put("/api/notifications/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const { data, error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("id", id);
+
+    if (error) throw error;
+    res.json({ message: "Notificação marcada como lida" });
+  } catch (error) {
+    console.error("Erro ao marcar a notificação como lida:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(port, () => {
